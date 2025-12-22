@@ -9,9 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lucide-react": "^0.562.0",
     "react": "^19.2.3",
-    "@google/genai": "^1.34.0",
+    "lucide-react": "0.263.1",
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
