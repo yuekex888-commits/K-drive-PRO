@@ -2,10 +2,8 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <!-- FIXED: Added viewport-fit=cover for iPhone notch/dynamic island support -->
+    <!-- iOS PWA & Viewport Configuration -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
-    <!-- iOS PWA Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#ffffff">
@@ -26,7 +24,7 @@
             overflow-x: hidden; 
             -webkit-tap-highlight-color: transparent; 
             overscroll-behavior-y: none;
-            background-color: #f9fafb; /* Match gray-50 */
+            background-color: #f9fafb;
         }
         ::-webkit-scrollbar { width: 0px; background: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -53,6 +51,7 @@
     </style>
 
     <!-- Import Map for React & Icons -->
+    <!-- FIXED: Removed conflicting wildcards for React 19. Strictly pinned to React 18.2.0. -->
     <script type="importmap">
 {
   "imports": {
@@ -172,11 +171,13 @@
           if (firstOpen !== -1) {
             jsonString = jsonString.substring(firstOpen);
           }
+          
           try {
             return JSON.parse(jsonString);
           } catch (e) {
             // Proceed to repair
           }
+          
           try {
             const stack = [];
             let inString = false;
