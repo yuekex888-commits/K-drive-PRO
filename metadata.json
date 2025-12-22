@@ -1,0 +1,7 @@
+{
+  "name": "Gemini Drive - AI Route Planner",
+  "description": "A smart self-driving tour planner powered by Gemini and Google Maps for personalized itineraries, including food, parking, and accommodation.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
