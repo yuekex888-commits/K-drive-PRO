@@ -81,7 +81,7 @@
             Save, Trash2, RefreshCw, Plus, Minus, Check, Map as MapIcon, 
             List as ListIcon, Layers, X, Loader2, LocateFixed, Compass, Moon, Sun, Utensils,
             Image as ImageIcon, MessageSquare, Ticket, Banknote, Watch, AlertTriangle, Heart, Eye,
-            Maximize2, Users, Receipt, Camera, FolderOpen, Edit3, Play, ChefHat, Wallet
+            Maximize2, Users, Receipt, Camera, FolderOpen, Edit3, Play, ChefHat, Wallet, Tent
         } from 'lucide-react';
 
         // --- TYPES ---
@@ -93,7 +93,7 @@
         };
 
         const AccommodationType = {
-          CAR: '车住',
+          CAR: '车住(床车)',
           HOTEL: '酒店'
         };
 
@@ -107,7 +107,11 @@
         const DEFAULT_SETTINGS = {
           apiKey: "sk-28c0d0093c2c4486ac3b394da91f7386",
           baseUrl: "https://api.grsai.com/v1/chat/completions",
-          model: "gemini-3-pro"
+          model: "gemini-3-pro",
+          // Default Budget Preferences
+          defaultHotelBudget: 500,
+          defaultDiningPerPerson: 100,
+          defaultDiningTotal: 2000
         };
 
         function getSettings() {
@@ -235,6 +239,25 @@
               diningInstruction = `- **DINING BUDGET**: Average approx ${diningPerPerson} CNY per person per meal.`;
           }
 
+          // Construct Accom Instructions
+          let accomInstruction = "";
+          if (includeAccom) {
+              if (accommodationType === AccommodationType.HOTEL) {
+                  accomInstruction = `Accom: Hotel (Budget ~${hotelBudget} CNY/night).`;
+              } else {
+                  // Bed Car Mode Specifics
+                  accomInstruction = `
+                  - **ACCOMMODATION (BED CAR / SLEEPING IN CAR)**: 
+                  - **TARGET**: Find **Underground Parking Lots** (preferred for stable temp) or safe 24h Public Parking suitable for stealth camping/sleeping in vehicle.
+                  - **COST**: Priority on **FREE** or very cheap parking.
+                  - **STRICTLY FORBIDDEN**: Do NOT suggest RV Campsites (房车营地) or Hotels. User is in a converted normal car (bed car), not an RV.
+                  - **DESCRIPTION**: Must mention parking fees (e.g., "Free", "¥5/hour") and if it's underground/sheltered.
+                  `;
+              }
+          } else {
+              accomInstruction = "Accom: None needed.";
+          }
+
           const systemInstruction = `You are a Senior Luxury Travel Consultant & Local Expert for China.
           **YOUR GOAL**: Design a "Travel Experience", NOT just a navigation route.
           **PRIORITY**: Quality of Attractions > Food Quality > Scenic Route > Distance Efficiency.
@@ -256,7 +279,7 @@
 
           **PREFERENCES**:
           Travelers: ${travelers}. Pacing: ${pacing}. Round Trip: ${isRoundTrip}.
-          Accom: ${includeAccom ? (accommodationType === AccommodationType.HOTEL ? `Hotel (Budget ~${hotelBudget} CNY/night)` : "Car camping") : "None"}.
+          ${accomInstruction}
           ${diningInstruction}
 
           **OUTPUT**: JSON Only.
@@ -267,7 +290,7 @@
             ]
           }`;
 
-          const userPrompt = `Design a premium ${days}-day self-driving itinerary from ${start} to ${end}. Start: ${startTime}, End: ${endTime}. Travelers: ${travelers}. Focus on 5A/4A attractions. Dining Strategy: ${diningMode === 'total' ? 'Mix Budget & Premium' : 'Consistent Budget'}. Return entirely in Simplified Chinese.`;
+          const userPrompt = `Design a premium ${days}-day self-driving itinerary from ${start} to ${end}. Start: ${startTime}, End: ${endTime}. Travelers: ${travelers}. Focus on 5A/4A attractions. Return entirely in Simplified Chinese.`;
 
           const responseText = await callOpenAICompatible([
             { role: "system", content: systemInstruction },
@@ -278,7 +301,7 @@
         }
 
         async function getAlternativePoints(pointName, type, context = {}) {
-          const { hotelBudget, diningPerPerson, diningMode } = context;
+          const { hotelBudget, diningPerPerson, diningMode, accommodationType } = context;
 
           let typeInstruction = "";
           
@@ -300,6 +323,13 @@
               typeInstruction = `
               CRITICAL REQUIREMENT: The alternatives MUST be **RESTAURANTS** (Dining).
               ${budgetText}
+              `;
+          } else if (type === 'parking') {
+              // Bed Car Parking logic
+              typeInstruction = `
+              CRITICAL REQUIREMENT: The alternatives MUST be **Underground Parking Lots** or **Safe Public Parking** suitable for sleeping in a car (Bed Car).
+              **STRICTLY FORBIDDEN**: RV Campsites (房车营地) or Hotels.
+              **PRIORITY**: FREE or very cheap parking fees.
               `;
           } else {
               typeInstruction = `Find 5 alternative Top-Tier (>4.5 rating) places of type "${type}".`;
@@ -374,6 +404,10 @@
         };
 
         const App = () => {
+          // --- State Initialization with Defaults ---
+          // Use a function to initialize state so it reads from localStorage/defaults only once
+          const initialSettings = getSettings();
+
           const [isFormExpanded, setIsFormExpanded] = useState(true);
           const [isLoading, setIsLoading] = useState(false);
           const [plan, setPlan] = useState(null);
@@ -392,15 +426,11 @@
           const [isLoadingRecs, setIsLoadingRecs] = useState(false);
 
           const [showSettings, setShowSettings] = useState(false);
-          const [showHistory, setShowHistory] = useState(false); // Saved Plans Modal
-          const [editingPlanId, setEditingPlanId] = useState(null); // For renaming
+          const [showHistory, setShowHistory] = useState(false); 
+          const [editingPlanId, setEditingPlanId] = useState(null);
           const [editTitle, setEditTitle] = useState("");
 
-          const [settings, setSettings] = useState({
-            apiKey: "sk-28c0d0093c2c4486ac3b394da91f7386",
-            baseUrl: "https://api.grsai.com/v1/chat/completions",
-            model: "gemini-3-pro"
-          });
+          const [settings, setSettings] = useState(initialSettings);
 
           const [start, setStart] = useState('上海');
           const [end, setEnd] = useState('杭州');
@@ -416,12 +446,12 @@
           const [pacing, setPacing] = useState(Pacing.MODERATE);
           const [includeAccom, setIncludeAccom] = useState(true);
           const [accommodationType, setAccommodationType] = useState(AccommodationType.HOTEL);
-          const [hotelBudget, setHotelBudget] = useState(500);
-
-          // Dining States
+          
+          // Initializing Budget States from Settings
+          const [hotelBudget, setHotelBudget] = useState(initialSettings.defaultHotelBudget);
           const [diningMode, setDiningMode] = useState(DiningMode.PER_MEAL);
-          const [diningPerPerson, setDiningPerPerson] = useState(100);
-          const [diningTotal, setDiningTotal] = useState(2000);
+          const [diningPerPerson, setDiningPerPerson] = useState(initialSettings.defaultDiningPerPerson);
+          const [diningTotal, setDiningTotal] = useState(initialSettings.defaultDiningTotal);
 
           const [mustVisitInput, setMustVisitInput] = useState("");
           const [mustVisitList, setMustVisitList] = useState([]);
@@ -431,11 +461,17 @@
           useEffect(() => {
             const history = localStorage.getItem('gemini_drive_history');
             if (history) setSavedPlans(JSON.parse(history));
-            const storedSettings = localStorage.getItem('gemini_drive_settings');
-            if (storedSettings) setSettings(JSON.parse(storedSettings));
           }, []);
 
-          const saveSettings = () => { localStorage.setItem('gemini_drive_settings', JSON.stringify(settings)); setShowSettings(false); alert("设置已保存！"); };
+          // When settings change (e.g. from modal), we might want to update current form values 
+          // ONLY if they haven't been manually touched? For simplicity, we keep them separate 
+          // but saving settings updates the 'default' for NEXT refresh.
+          const saveSettings = () => { 
+              localStorage.setItem('gemini_drive_settings', JSON.stringify(settings)); 
+              setShowSettings(false); 
+              alert("设置已保存！新的默认预算将在下次刷新或新规划时生效。"); 
+          };
+
           const addMustVisit = () => { if (mustVisitInput.trim()) { setMustVisitList([...mustVisitList, mustVisitInput.trim()]); setMustVisitInput(""); } };
           const removeMustVisit = (idx) => { setMustVisitList(mustVisitList.filter((_, i) => i !== idx)); };
           const addAvoid = () => { if (avoidInput.trim()) { setAvoidList([...avoidList, avoidInput.trim()]); setAvoidInput(""); } };
@@ -567,7 +603,8 @@
             const context = {
                 hotelBudget: currentPlan.hotelBudget,
                 diningPerPerson: currentPlan.diningPerPerson,
-                diningMode: currentPlan.diningMode
+                diningMode: currentPlan.diningMode,
+                accommodationType: currentPlan.accommodationType // Pass this for parking logic
             };
             currentPlan.days.forEach((day, dIdx) => {
               day.points.forEach((point, pIdx) => {
@@ -596,7 +633,8 @@
             const context = {
                 hotelBudget: plan.hotelBudget,
                 diningPerPerson: plan.diningPerPerson,
-                diningMode: plan.diningMode
+                diningMode: plan.diningMode,
+                accommodationType: plan.accommodationType
             };
             if (pt.alternatives && pt.alternatives.length > 0) {
               setAlternatives(pt.alternatives);
@@ -624,7 +662,8 @@
             const context = {
                 hotelBudget: plan.hotelBudget,
                 diningPerPerson: plan.diningPerPerson,
-                diningMode: plan.diningMode
+                diningMode: plan.diningMode,
+                accommodationType: plan.accommodationType
             };
             const { dayIdx, pointIdx } = showAlternatives;
             const newPlan = { ...plan };
@@ -761,6 +800,34 @@
                   <div className="bg-white w-full rounded-[32px] p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto no-scrollbar">
                     <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-gray-800">设置</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X className="w-5 h-5" /></button></div>
                     <div className="space-y-6">
+                      
+                      <div className="space-y-3 pb-6 border-b border-gray-100">
+                        <h3 className="text-sm font-bold text-orange-600 uppercase tracking-widest flex items-center gap-2"><Wallet className="w-4 h-4"/> 默认预算偏好</h3>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">酒店每晚预算</label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">¥</span>
+                                <input type="number" value={settings.defaultHotelBudget} onChange={(e) => setSettings({...settings, defaultHotelBudget: parseInt(e.target.value) || 0})} className="w-full pl-8 pr-4 py-3 bg-gray-50 rounded-xl border border-transparent focus:border-orange-500 focus:bg-white outline-none transition-all text-sm font-medium" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">人均餐饮/餐</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">¥</span>
+                                    <input type="number" value={settings.defaultDiningPerPerson} onChange={(e) => setSettings({...settings, defaultDiningPerPerson: parseInt(e.target.value) || 0})} className="w-full pl-8 pr-4 py-3 bg-gray-50 rounded-xl border border-transparent focus:border-orange-500 focus:bg-white outline-none transition-all text-sm font-medium" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">总餐饮预算</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">¥</span>
+                                    <input type="number" value={settings.defaultDiningTotal} onChange={(e) => setSettings({...settings, defaultDiningTotal: parseInt(e.target.value) || 0})} className="w-full pl-8 pr-4 py-3 bg-gray-50 rounded-xl border border-transparent focus:border-orange-500 focus:bg-white outline-none transition-all text-sm font-medium" />
+                                </div>
+                            </div>
+                        </div>
+                      </div>
+
                       <div className="space-y-3">
                         <h3 className="text-sm font-bold text-blue-600 uppercase tracking-widest">AI 配置 (Gemini)</h3>
                         <div><label className="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">API Key</label><input type="password" value={settings.apiKey} onChange={(e) => setSettings({...settings, apiKey: e.target.value})} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all text-sm font-medium" /></div>
@@ -891,8 +958,14 @@
                           <div className="flex items-center justify-between"><span className="text-sm font-bold text-gray-700">自动规划住宿</span><button onClick={() => setIncludeAccom(!includeAccom)} className={`w-12 h-6 rounded-full transition-colors relative ${includeAccom ? 'bg-blue-600' : 'bg-gray-200'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${includeAccom ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>
                           {includeAccom && (
                             <div className="space-y-4 animate-in fade-in duration-300">
-                              <div className="flex bg-gray-100 p-1 rounded-2xl"><button onClick={() => setAccommodationType(AccommodationType.HOTEL)} className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${accommodationType === AccommodationType.HOTEL ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>酒店</button><button onClick={() => setAccommodationType(AccommodationType.CAR)} className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${accommodationType === AccommodationType.CAR ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>车住</button></div>
+                              <div className="flex bg-gray-100 p-1 rounded-2xl"><button onClick={() => setAccommodationType(AccommodationType.HOTEL)} className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${accommodationType === AccommodationType.HOTEL ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>酒店</button><button onClick={() => setAccommodationType(AccommodationType.CAR)} className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${accommodationType === AccommodationType.CAR ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>车住(床车)</button></div>
                               {accommodationType === AccommodationType.HOTEL && (<div className="space-y-2"><div className="flex justify-between text-[10px] font-bold text-gray-400"><span>每晚预算</span><span className="text-blue-600">￥{hotelBudget}</span></div><input type="range" min="100" max="2000" step="100" value={hotelBudget} onChange={e => setHotelBudget(Number(e.target.value))} className="w-full h-1 bg-gray-200 rounded-full appearance-none accent-blue-600" /></div>)}
+                              {accommodationType === AccommodationType.CAR && (
+                                  <div className="bg-blue-50 p-3 rounded-xl text-[10px] text-blue-600 leading-relaxed border border-blue-100">
+                                      <div className="flex items-center gap-1 font-bold mb-1"><Car className="w-3 h-3"/> 床车模式已开启</div>
+                                      AI 将优先寻找<b>免费/便宜的地下停车场</b>（冬暖夏凉）或24h公共停车场。已屏蔽房车营地。
+                                  </div>
+                              )}
                             </div>
                           )}
                         </div>
