@@ -51,7 +51,6 @@
     </style>
 
     <!-- Import Map for React & Icons -->
-    <!-- FIXED: Removed conflicting wildcards for React 19. Strictly pinned to React 18.2.0. -->
     <script type="importmap">
 {
   "imports": {
@@ -67,8 +66,7 @@
     <!-- Babel for in-browser TSX compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Google Maps -->
-    <script src="https://maps.googleapis.com/maps/api/js?libraries=places"></script>
+    <!-- Removed Google Maps Script to satisfy requirements -->
 </head>
 <body class="bg-gray-50">
     <div id="root"></div>
@@ -83,7 +81,7 @@
             Save, Trash2, RefreshCw, Plus, Minus, Check, Map as MapIcon, 
             List as ListIcon, Layers, X, Loader2, LocateFixed, Compass, Moon, Sun, Utensils,
             Image as ImageIcon, MessageSquare, Ticket, Banknote, Watch, AlertTriangle, Heart, Eye,
-            Maximize2, Users, Receipt, Camera
+            Maximize2, Users, Receipt, Camera, FolderOpen, Edit3, Play
         } from 'lucide-react';
 
         // --- TYPES ---
@@ -213,28 +211,34 @@
           const systemInstruction = `You are a Senior Luxury Travel Consultant & Local Expert for China.
           **YOUR GOAL**: Design a "Travel Experience", NOT just a navigation route.
           **PRIORITY**: Quality of Attractions > Food Quality > Scenic Route > Distance Efficiency.
+          **LANGUAGE**: **STRICTLY SIMPLIFIED CHINESE (简体中文)**. All titles, names, descriptions, and costs must be in Chinese.
+
           **STRICT RULES**:
           1. Must-Visit: National 5A/4A Tourist Attractions.
-          2. Store Names: Exact names (Dianping Black Pearl, Michelin). No generic names.
+          2. Store Names: Exact Chinese names (Dianping Black Pearl, Michelin). No generic names like "Local Restaurant".
           3. Smart Detours: Maximize scenery.
+          
           **USER REQUIREMENTS**:
           ${mustVisit && mustVisit.length > 0 ? `- MUST VISIT: ${mustVisit.join(', ')}.` : ''}
           ${avoid && avoid.length > 0 ? `- AVOID: ${avoid.join(', ')}.` : ''}
+
           **SCHEDULE**:
           1. Timezone: UTC+8.
           2. Trip: [${startTime}] to [${endTime}].
           3. Sleep: 23:00 - 08:00 (No travel).
+
           **PREFERENCES**:
           Travelers: ${travelers}. Pacing: ${pacing}. Accom: ${includeAccom ? (accommodationType === AccommodationType.HOTEL ? `Hotel (Budget ~${hotelBudget} CNY)` : "Car camping") : "None"}. Round Trip: ${isRoundTrip}.
+
           **OUTPUT**: JSON Only.
           {
-            "title": "string",
+            "title": "string (Creative Chinese Title)",
             "days": [
-              { "day": number, "date": "YYYY-MM-DD", "transportation_cost": "string", "points": [ { "name": "string", "type": "attraction" | "restaurant" | "parking" | "hotel", "arrivalTime": "HH:mm", "duration": "string", "ticket_price": "string", "average_cost": "string", "description": "string", "rating": number, "user_ratings_total": number, "lat": number, "lng": number, "travelTimeToNext": "string" } ] }
+              { "day": number, "date": "YYYY-MM-DD", "transportation_cost": "string (e.g. '¥200')", "points": [ { "name": "string (Chinese Name)", "type": "attraction" | "restaurant" | "parking" | "hotel", "arrivalTime": "HH:mm", "duration": "string", "ticket_price": "string", "average_cost": "string", "description": "string (In Chinese)", "rating": number, "user_ratings_total": number, "lat": number, "lng": number, "travelTimeToNext": "string" } ] }
             ]
           }`;
 
-          const userPrompt = `Design a premium ${days}-day self-driving itinerary from ${start} to ${end}. Start: ${startTime}, End: ${endTime}. Travelers: ${travelers}. Focus on 5A/4A attractions and premium food.`;
+          const userPrompt = `Design a premium ${days}-day self-driving itinerary from ${start} to ${end}. Start: ${startTime}, End: ${endTime}. Travelers: ${travelers}. Focus on 5A/4A attractions and premium food. Return entirely in Simplified Chinese.`;
 
           const responseText = await callOpenAICompatible([
             { role: "system", content: systemInstruction },
@@ -245,15 +249,19 @@
         }
 
         async function getAlternativePoints(pointName, type) {
-          const systemInstruction = `Find 5 alternative Top-Tier (>4.5 rating) places for "${pointName}" of type "${type}". Output JSON Array: [{"name", "rating", "user_ratings_total", "description", "lat", "lng", "ticket_price", "average_cost", "duration"}]`;
-          const responseText = await callOpenAICompatible([ { role: "system", content: systemInstruction }, { role: "user", content: "Find alternatives." } ]);
+          const systemInstruction = `Find 5 alternative Top-Tier (>4.5 rating) places for "${pointName}" of type "${type}". 
+          Language: **STRICTLY SIMPLIFIED CHINESE**.
+          Output JSON Array: [{"name", "rating", "user_ratings_total", "description", "lat", "lng", "ticket_price", "average_cost", "duration"}]`;
+          const responseText = await callOpenAICompatible([ { role: "system", content: systemInstruction }, { role: "user", content: "Find alternatives in Chinese." } ]);
           const data = extractJson(responseText);
           return Array.isArray(data) ? data : (data.alternatives || []);
         }
 
         async function recommendDestinations(currentLocation) {
-          const systemInstruction = `Recommend 5 High-Quality self-driving destinations >300km from ${currentLocation}. Output JSON Array of strings.`;
-          const responseText = await callOpenAICompatible([ { role: "system", content: systemInstruction }, { role: "user", content: "Recommend destinations." } ]);
+          const systemInstruction = `Recommend 5 High-Quality self-driving destinations >300km from ${currentLocation}. 
+          Language: **STRICTLY SIMPLIFIED CHINESE**.
+          Output JSON Array of strings: ["City1", "City2"...]`;
+          const responseText = await callOpenAICompatible([ { role: "system", content: systemInstruction }, { role: "user", content: "Recommend destinations in Chinese." } ]);
           const data = extractJson(responseText);
           return Array.isArray(data) ? data : [];
         }
@@ -311,7 +319,6 @@
           const [viewMode, setViewMode] = useState('list');
           
           const [selectedPoint, setSelectedPoint] = useState(null);
-          const [isLoadingDetails, setIsLoadingDetails] = useState(false);
           const [lightboxImage, setLightboxImage] = useState(null);
 
           const [showAlternatives, setShowAlternatives] = useState(null);
@@ -323,11 +330,14 @@
           const [isLoadingRecs, setIsLoadingRecs] = useState(false);
 
           const [showSettings, setShowSettings] = useState(false);
+          const [showHistory, setShowHistory] = useState(false); // Saved Plans Modal
+          const [editingPlanId, setEditingPlanId] = useState(null); // For renaming
+          const [editTitle, setEditTitle] = useState("");
+
           const [settings, setSettings] = useState({
             apiKey: "sk-28c0d0093c2c4486ac3b394da91f7386",
             baseUrl: "https://api.grsai.com/v1/chat/completions",
-            model: "gemini-3-pro",
-            googleMapsKey: ""
+            model: "gemini-3-pro"
           });
 
           const [start, setStart] = useState('上海');
@@ -363,6 +373,58 @@
           const removeMustVisit = (idx) => { setMustVisitList(mustVisitList.filter((_, i) => i !== idx)); };
           const addAvoid = () => { if (avoidInput.trim()) { setAvoidList([...avoidList, avoidInput.trim()]); setAvoidInput(""); } };
           const removeAvoid = (idx) => { setAvoidList(avoidList.filter((_, i) => i !== idx)); };
+
+          // --- Plan Management (History) ---
+          const saveCurrentPlan = () => {
+             if (!plan) return;
+             // Check if plan already exists (by ID)
+             const existingIdx = savedPlans.findIndex(p => p.id === plan.id);
+             let newHistory;
+             if (existingIdx >= 0) {
+                 newHistory = [...savedPlans];
+                 newHistory[existingIdx] = plan;
+             } else {
+                 newHistory = [plan, ...savedPlans];
+             }
+             setSavedPlans(newHistory);
+             localStorage.setItem('gemini_drive_history', JSON.stringify(newHistory));
+             alert("方案已保存至“我的行程”");
+          };
+
+          const deletePlan = (e, id) => {
+             e.stopPropagation();
+             if(!confirm("确定要删除这个行程吗？")) return;
+             const newHistory = savedPlans.filter(p => p.id !== id);
+             setSavedPlans(newHistory);
+             localStorage.setItem('gemini_drive_history', JSON.stringify(newHistory));
+             if (plan && plan.id === id) setPlan(null);
+          };
+
+          const loadPlan = (p) => {
+             setPlan(p);
+             setStart(p.startPoint);
+             setEnd(p.endPoint);
+             setDays(p.durationDays);
+             // Restore inputs
+             setMustVisitList(p.mustVisit || []);
+             setAvoidList(p.avoid || []);
+             setShowHistory(false);
+          };
+
+          const startRenaming = (e, p) => {
+              e.stopPropagation();
+              setEditingPlanId(p.id);
+              setEditTitle(p.title);
+          };
+
+          const saveRename = (e, id) => {
+              e.stopPropagation();
+              const newHistory = savedPlans.map(p => p.id === id ? { ...p, title: editTitle } : p);
+              setSavedPlans(newHistory);
+              localStorage.setItem('gemini_drive_history', JSON.stringify(newHistory));
+              if (plan && plan.id === id) setPlan({ ...plan, title: editTitle });
+              setEditingPlanId(null);
+          };
 
           const calculateDaysDiff = (s, e) => {
             const startD = new Date(s);
@@ -405,21 +467,10 @@
             const success = (position) => {
               const { latitude, longitude } = position.coords;
               const latLngStr = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-              if (typeof google !== 'undefined' && google.maps) {
-                const geocoder = new google.maps.Geocoder();
-                geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
-                  if (status === "OK" && results[0]) {
-                    let city = "";
-                    for (const comp of results[0].address_components) {
-                      if (comp.types.includes("locality")) city = comp.long_name;
-                      if (!city && comp.types.includes("administrative_area_level_2")) city = comp.long_name;
-                    }
-                    setStart(city || latLngStr);
-                    fetchRecommendations(city || latLngStr);
-                  } else { setStart(latLngStr); fetchRecommendations(latLngStr); }
-                  setIsLocating(false);
-                });
-              } else { setStart(latLngStr); fetchRecommendations(latLngStr); setIsLocating(false); }
+              // NO GOOGLE API: Just use raw coords or suggest user type city
+              setStart(latLngStr);
+              fetchRecommendations("中国"); // Default generic recommendations since we don't know city name
+              setIsLocating(false);
             };
             const error = () => { alert("定位失败，请检查权限"); setIsLocating(false); };
             navigator.geolocation.getCurrentPosition(success, error);
@@ -462,26 +513,7 @@
             });
           };
 
-          const fetchGooglePlaceDetails = (point) => {
-            if (typeof google === 'undefined' || !google.maps || !google.maps.places) return;
-            let dummyNode = document.createElement('div');
-            const service = new google.maps.places.PlacesService(dummyNode);
-            setIsLoadingDetails(true);
-            service.findPlaceFromQuery({ query: point.name, fields: ['photos', 'reviews', 'place_id'] }, (results, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && results && results[0]) {
-                 service.getDetails({ placeId: results[0].place_id, fields: ['photos', 'reviews'] }, (place, status) => {
-                     setIsLoadingDetails(false);
-                     if (status === google.maps.places.PlacesServiceStatus.OK) {
-                         const photos = place.photos?.slice(0, 4).map((p) => p.getUrl({ maxWidth: 1024, maxHeight: 768 })) || [];
-                         const reviews = place.reviews?.slice(0, 4).map((r) => r.text) || [];
-                         setSelectedPoint(prev => prev ? ({ ...prev, photos, reviews }) : null);
-                     }
-                 });
-              } else { setIsLoadingDetails(false); }
-            });
-          };
-
-          const handlePointClick = (pt) => { setSelectedPoint(pt); fetchGooglePlaceDetails(pt); };
+          const handlePointClick = (pt) => { setSelectedPoint(pt); };
           const handleReplaceClick = (e, pt, dIdx, pIdx) => {
             e.stopPropagation();
             if (pt.alternatives && pt.alternatives.length > 0) {
@@ -528,13 +560,9 @@
             if (points.length < 2) return "";
             const origin = `${points[0].lat},${points[0].lng}`;
             const destination = `${points[points.length-1].lat},${points[points.length-1].lng}`;
-            if (settings.googleMapsKey) {
-                const waypoints = points.slice(1, -1).map(p => `${p.lat},${p.lng}`).join('|');
-                return `https://www.google.com/maps/embed/v1/directions?key=${settings.googleMapsKey}&origin=${origin}&destination=${destination}&waypoints=${waypoints}&mode=driving`;
-            } else {
-                const daddr = points.slice(1).map(p => `${p.lat},${p.lng}`).join('+to:');
-                return `https://maps.google.com/maps?saddr=${origin}&daddr=${daddr}&ie=UTF8&output=embed`;
-            }
+            // NO API KEY: Use legacy embed format
+            const daddr = points.slice(1).map(p => `${p.lat},${p.lng}`).join('+to:');
+            return `https://maps.google.com/maps?saddr=${origin}&daddr=${daddr}&ie=UTF8&output=embed`;
           };
 
           const calculateTotalCost = (p) => {
@@ -585,8 +613,61 @@
                   <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200"><Compass className="text-white w-5 h-5" /></div>
                   <h1 className="font-bold text-lg text-gray-800 tracking-tight">K-drive PRO</h1>
                 </div>
-                <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors"><SettingsIcon className="w-5 h-5" /></button>
+                <div className="flex items-center gap-1">
+                    <button onClick={() => setShowHistory(true)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors"><FolderOpen className="w-5 h-5" /></button>
+                    <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors"><SettingsIcon className="w-5 h-5" /></button>
+                </div>
               </header>
+
+              {/* History Modal */}
+              {showHistory && (
+                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200" style={{paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)'}}>
+                    <div className="bg-white w-full rounded-[32px] p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto no-scrollbar flex flex-col">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FolderOpen className="w-5 h-5 text-blue-500"/>我的行程 ({savedPlans.length})</h2>
+                            <button onClick={() => setShowHistory(false)} className="p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X className="w-5 h-5" /></button>
+                        </div>
+                        {savedPlans.length === 0 ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-gray-300 py-10">
+                                <FolderOpen className="w-12 h-12 mb-2 opacity-50"/>
+                                <p className="text-sm">暂无保存的行程</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {savedPlans.map(p => (
+                                    <div key={p.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between group">
+                                        <div className="flex-1 min-w-0 mr-4">
+                                            {editingPlanId === p.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        value={editTitle} 
+                                                        onChange={(e) => setEditTitle(e.target.value)}
+                                                        className="w-full bg-white px-2 py-1 rounded border border-blue-200 text-sm font-bold"
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={(e) => saveRename(e, p.id)} className="p-1.5 bg-green-50 text-green-600 rounded-lg"><Check className="w-4 h-4"/></button>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <h3 className="font-bold text-gray-800 text-sm truncate">{p.title}</h3>
+                                                    <p className="text-[10px] text-gray-400 mt-1">{p.startPoint} <ArrowRight className="w-3 h-3 inline"/> {p.endPoint} · {p.durationDays}天</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {editingPlanId !== p.id && (
+                                                <button onClick={(e) => startRenaming(e, p)} className="p-2 text-gray-400 hover:text-blue-500 bg-white rounded-xl shadow-sm"><Edit3 className="w-4 h-4"/></button>
+                                            )}
+                                            <button onClick={() => loadPlan(p)} className="p-2 text-blue-600 bg-blue-50 rounded-xl font-bold shadow-sm"><Play className="w-4 h-4 fill-current"/></button>
+                                            <button onClick={(e) => deletePlan(e, p.id)} className="p-2 text-red-400 hover:text-red-600 bg-white rounded-xl shadow-sm"><Trash2 className="w-4 h-4"/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                 </div>
+              )}
 
               {showSettings && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200" style={{paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)'}}>
@@ -616,7 +697,7 @@
                 <section className="p-4">
                   <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
                     <button onClick={() => setIsFormExpanded(!isFormExpanded)} className="w-full px-6 py-4 flex items-center justify-between text-gray-700 font-bold">
-                      <div className="flex items-center gap-2"><Search className="w-4 h-4 text-blue-500" /><span>{plan ? "查看路线设置" : "规划你的旅程"}</span></div>
+                      <div className="flex items-center gap-2"><Search className="w-4 h-4 text-blue-500" /><span>{plan ? plan.title : "规划你的旅程"}</span></div>
                       {isFormExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                     </button>
                     {isFormExpanded && (
@@ -740,7 +821,7 @@
               <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto glass border-t border-white/50 px-12 py-6 flex justify-around items-center z-[60] safe-bottom rounded-t-[40px] shadow-2xl">
                 <button onClick={() => plan && setViewMode('list')} className={`flex flex-col items-center gap-1 transition-all ${viewMode === 'list' ? 'text-blue-600 scale-110' : 'text-gray-400'}`}><ListIcon className="w-6 h-6" /><span className="text-[10px] font-bold uppercase">清单</span></button>
                 <button onClick={() => plan && setViewMode('map')} className={`flex flex-col items-center gap-1 transition-all ${viewMode === 'map' ? 'text-blue-600 scale-110' : 'text-gray-400'}`}><MapIcon className="w-6 h-6" /><span className="text-[10px] font-bold uppercase">地图</span></button>
-                <button onClick={() => { const h = [plan, ...savedPlans].filter(Boolean); setSavedPlans(h); localStorage.setItem('gemini_drive_history', JSON.stringify(h)); alert("方案已保存"); }} className="flex flex-col items-center gap-1 text-gray-400"><Save className="w-6 h-6" /><span className="text-[10px] font-bold uppercase">保存</span></button>
+                <button onClick={saveCurrentPlan} className="flex flex-col items-center gap-1 text-gray-400 hover:text-blue-600 transition-colors"><Save className="w-6 h-6" /><span className="text-[10px] font-bold uppercase">保存</span></button>
               </nav>
 
               {selectedPoint && !showAlternatives && (
@@ -765,7 +846,6 @@
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           <div className="flex items-center gap-1 text-orange-500 font-bold bg-orange-50 px-2 py-1 rounded-lg text-sm"><Star className="w-4 h-4 fill-current" /><span>{selectedPoint.rating}</span></div>
                           <span className="text-gray-400 text-sm">({selectedPoint.user_ratings_total} 条评价)</span>
-                          {isLoadingDetails && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
                         </div>
                       </div>
 
@@ -777,10 +857,8 @@
 
                       <div className="space-y-6">
                         <div><h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">简介</h4><p className="text-gray-600 text-sm leading-relaxed">{selectedPoint.description}</p></div>
-                        <div><h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><MessageSquare className="w-3 h-3"/> 精选评价 (来源: Google Maps)</h4>
-                           {selectedPoint.reviews && selectedPoint.reviews.length > 0 ? (
-                             <div className="space-y-3">{selectedPoint.reviews.map((review, i) => (<div key={i} className="bg-gray-50 p-4 rounded-2xl text-xs text-gray-600 leading-relaxed italic border border-gray-100">"{review.length > 120 ? review.substring(0, 120) + '...' : review}"</div>))}</div>
-                           ) : (<div className="text-center py-4 text-gray-400 text-xs italic bg-gray-50 rounded-2xl border border-dashed border-gray-200">{isLoadingDetails ? "正在加载评价..." : "暂无评价显示"}</div>)}
+                        <div><h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><MessageSquare className="w-3 h-3"/> AI 推荐理由</h4>
+                           <div className="text-center py-4 text-gray-400 text-xs italic bg-gray-50 rounded-2xl border border-dashed border-gray-200">此地点为 AI 根据您的喜好智能推荐，暂无实时评论。</div>
                         </div>
                       </div>
                     </div>
