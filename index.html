@@ -2,10 +2,15 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <!-- iOS PWA & Viewport Configuration: 使用 viewport-fit=cover 并在 CSS 中处理安全区 -->
+    <!-- iOS PWA & Viewport Configuration -->
+    <!-- viewport-fit=cover 是全屏适配灵动岛的关键 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <!-- black-translucent 让内容能沉浸到状态栏下方 -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="K-drive">
     <meta name="theme-color" content="#ffffff">
 
     <title>K-drive PRO - 智能规划专家</title>
@@ -18,20 +23,18 @@
     
     <!-- Styles -->
     <style>
-        /* FIX FOR BUG 1 & 2: 
-           Lock the body height to the dynamic viewport height (dvh) to prevent
-           address bar resizing from messing up fixed elements.
-        */
+        /* 全局锁定，防止 iOS 橡皮筋回弹效果 */
         html, body { 
             height: 100dvh; 
             width: 100vw;
-            overflow: hidden; /* Disable scrolling on body */
-            position: fixed; /* Lock position to prevent rubber banding on whole page */
+            overflow: hidden; /* 禁止 body 滚动，只允许内部容器滚动 */
+            position: fixed; /* 锁定位置 */
             margin: 0;
             padding: 0;
             font-family: 'Inter', -apple-system, sans-serif; 
             background-color: #f9fafb;
             -webkit-tap-highlight-color: transparent; 
+            overscroll-behavior: none; /* 关键：禁止页面整体拖动 */
         }
 
         #root {
@@ -43,22 +46,34 @@
             position: relative;
         }
 
-        /* The scrollable area is NOW ONLY inside main */
+        /* 滚动区域仅限于 main */
         .scroll-container {
             flex: 1;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding-bottom: 140px; /* Space for footer */
+            padding-bottom: 140px; /* 为底部导航栏预留空间 */
         }
 
         ::-webkit-scrollbar { width: 0px; background: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 毛玻璃效果 */
         .glass { background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         
-        /* Safe Area Utilities */
-        .safe-top { padding-top: env(safe-area-inset-top); }
-        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        /* --- 核心适配逻辑 --- */
+        
+        /* 顶部适配：灵动岛 & 状态栏 */
+        .safe-top { 
+            /* 优先使用系统安全区（适配灵动岛），如果系统未提供或小于25px，则强制使用25px */
+            padding-top: max(25px, env(safe-area-inset-top)); 
+        }
+        
+        /* 底部适配：Home Indicator */
+        .safe-bottom { 
+            /* 增加底部内边距，让内容避开黑色横条，但背景色会延伸到底部 */
+            padding-bottom: env(safe-area-inset-bottom); 
+        }
         
         .map-container { height: 100%; width: 100%; }
         input[type="range"]::-webkit-slider-thumb {
@@ -70,7 +85,6 @@
         }
         .custom-input:focus-within { box-shadow: 0 0 0 2px #3b82f6; background: #fff; }
 
-        /* Animation Keyframes */
         @keyframes pulse-slow {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
@@ -231,9 +245,6 @@
             return content;
           } catch (error) {
             console.error("API Call Error, switching to MOCK mode:", error);
-            
-            // Show a visual alert to the user once per session if possible, or just log
-            // For now, we return mock data based on the user's intent.
             
             // Heuristic to guess intent from the last message content
             const lastMsgContent = messages[messages.length - 1].content;
